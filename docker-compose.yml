@@ -1,0 +1,11 @@
+version: "3"
+
+services:
+    testserver:
+        build: .
+        container_name: test_testserver
+        ports:
+            - 14500:14500
+        volumes:
+            - ./testserver:/app/testserver
+            - ./data:/data
