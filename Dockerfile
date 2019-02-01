@@ -10,6 +10,7 @@ RUN mkdir /data
 # Installing dependencies one at a time should make it
 # build faster, right?
 RUN pip install flask
+RUN pip install pyyaml
 
 RUN mkdir /app/testserver
 COPY testserver app/testserver

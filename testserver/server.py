@@ -4,10 +4,11 @@ import os
 from contextlib import contextmanager
 from enum import Enum
 
-from urllib.parse   import urlsplit, urlunsplit
-from urllib.request import urlretrieve, urlopen
-import tarfile
-from tempfile import TemporaryDirectory
+from    urllib.parse   import urlsplit, urlunsplit
+from    urllib.request import urlretrieve, urlopen
+import  tarfile
+from    tempfile       import TemporaryDirectory
+import  yaml
 
 app = Flask(__name__)
 
@@ -17,16 +18,42 @@ class Result(Enum):
 
 @app.route('/application/<path:files_url>/feedback/<path:feedback_url>')
 def application(files_url, feedback_url):
-    msg = lambda txt : """
-    My feedback: the file was called """ + str(txt) + """
-
-    This submission was quite gay. However,
-
-    it is not wrong to be gay, since it is the current year.
-    Hence you pass the assignment
-    """
-    perform_tests(files_url, feedback_url, lambda files: (Result.PASS, msg("".join(files))))
+    perform_tests(files_url, feedback_url, validate_application)
     return "Running tests"
+
+def validate_application(filenames):
+    """
+    Validates the sittning application. Expecting filename to refer to a yaml file
+    """
+    class Field():
+        def __init__(self, name, required=False):
+            self.name = name
+            self.required = required
+
+    fields = {Field('namn', required=True), Field('matgnäll'), Field('gdpr', required=True)}
+
+    try: filename = filenames[0]
+    except IndexError: return (Result.FAIL, "No file submitted!")
+
+    with open(filename) as f:
+        try: data = yaml.load(f)
+        except yaml.YAMLError as e:
+            return (Result.FAIL, f'Invalid syntax in submitted file! \n\n {str(e)}')
+        except Exception as e:
+            return (Result.FAIL, f'Something went wrong! {str(e)}')
+
+    missing = []
+    for field in fields:
+        if (field.name not in data or not data[field.name]) and field.required:
+            missing.append(field.name)
+
+    if not len(missing) == 0:
+        return (Result.FAIL, "Missing required fields: \n" + "\n".join(missing))
+
+
+    # TODO verify GDPR
+
+    return (Result.PASS, str(data))
 
 
 def perform_tests(files_url, feedback_url, test):
@@ -49,7 +76,8 @@ def test_from_url(url, test):
         with tarfile.open(arch_path) as tar:
             tar.extractall(files_dir)
 
-        return test(os.listdir(files_dir))
+        fullpaths = list(map(lambda f: os.path.join(files_dir, f), os.listdir(files_dir)))
+        return test(fullpaths)
 
 def send_feedback(result, msg, feedback_url):
     url = f'{feedback_url}?status={result.value}'
