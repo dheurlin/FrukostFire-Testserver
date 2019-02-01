@@ -2,25 +2,45 @@ from flask import Flask
 
 import os
 from contextlib import contextmanager
+from enum import Enum
 
 from urllib.parse   import urlsplit, urlunsplit
-from urllib.request import urlretrieve
+from urllib.request import urlretrieve, urlopen
 import tarfile
 from tempfile import TemporaryDirectory
 
 app = Flask(__name__)
 
-@app.route('/test/<path:files_url>/feedback/<path:feedback_url>')
-def receive_test(files_url, feedback_url):
-    files_url = url_to_fire(files_url)
-    test_from_url(files_url, lambda _: True)
-    return files_url
+class Result(Enum):
+    PASS    = 'pass'
+    FAIL    = 'fail'
+
+@app.route('/application/<path:files_url>/feedback/<path:feedback_url>')
+def application(files_url, feedback_url):
+    msg = lambda txt : """
+    My feedback: the file was called """ + str(txt) + """
+
+    This submission was quite gay. However,
+
+    it is not wrong to be gay, since it is the current year.
+    Hence you pass the assignment
+    """
+    perform_tests(files_url, feedback_url, lambda files: (Result.PASS, msg("".join(files))))
+    return "Running tests"
+
+
+def perform_tests(files_url, feedback_url, test):
+    """
+    Downloads the files, runs the test : [file] -> (result : Result, msg : String)
+    function on each file, and sends the feedback to the server.
+    """
+    res, msg = test_from_url(url_to_fire(files_url), test)
+    send_feedback(res, msg, url_to_fire(feedback_url))
+
 
 def test_from_url(url, test):
     """
-    Downloads and unpacks the url, and performs the
-    test : [file] -> Bool function on each file
-    of filesk
+    Downloads and unpacks the url, and performs the test
     """
     with TemporaryDirectory() as arch_dir, TemporaryDirectory() as files_dir:
         arch_path = os.path.join(arch_dir, 'archive.tar.gz')
@@ -29,8 +49,12 @@ def test_from_url(url, test):
         with tarfile.open(arch_path) as tar:
             tar.extractall(files_dir)
 
-        for name in os.listdir(files_dir):
-            print(name)
+        return test(os.listdir(files_dir))
+
+def send_feedback(result, msg, feedback_url):
+    url = f'{feedback_url}?status={result.value}'
+    print(f"#### sending feedback to url {url} ######")
+    urlopen(url, bytearray(msg, 'utf-8'))
 
 def url_to_fire(url):
     """
@@ -41,26 +65,6 @@ def url_to_fire(url):
     parts = list(urlsplit(url))
     parts[1] = 'fire:5000'
     return urlunsplit(parts)
-
-# @contextmanager
-# def changedir(path):
-#     """
-#     Changes the directory and restores it afterwards
-#     """
-#     olddir = os.getcwd()
-#     os.chdir(path)
-#     try: yield
-#     finally: os.chdir(olddir)
-
-
-
-
-# @app.route('/', defaults={'path': ''})
-# @app.route('/<path:path>')
-# def catch_all(path):
-#     print(f'################ CATCH-ALL: {path}')
-#     return f'########### CATCH_ALL: {path}'
-
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", debug=True, port=14500)
