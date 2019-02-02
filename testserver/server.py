@@ -1,7 +1,6 @@
 from flask import Flask
 
 import os
-from contextlib import contextmanager
 from enum import Enum
 
 from    urllib.parse   import urlsplit, urlunsplit
@@ -18,10 +17,10 @@ class Result(Enum):
 
 @app.route('/application/<path:files_url>/feedback/<path:feedback_url>')
 def application(files_url, feedback_url):
-    perform_tests(files_url, feedback_url, validate_application)
+    perform_tests(files_url, feedback_url, test_single_file(validate_application))
     return "Running tests"
 
-def validate_application(filenames):
+def validate_application(filename):
     """
     Validates the sittning application. Expecting filename to refer to a yaml file
     """
@@ -31,9 +30,6 @@ def validate_application(filenames):
             self.required = required
 
     fields = {Field('namn', required=True), Field('matgnäll'), Field('gdpr', required=True)}
-
-    try: filename = filenames[0]
-    except IndexError: return (Result.FAIL, "No file submitted!")
 
     with open(filename) as f:
         try: data = yaml.load(f)
@@ -54,6 +50,18 @@ def validate_application(filenames):
     # TODO verify GDPR
 
     return (Result.PASS, str(data))
+
+def test_single_file(test):
+    """
+    runs a test : File -> (result : Result, msg : String) that operates
+    on a single file
+    """
+    def test_file(filenames):
+        try: filename = filenames[0]
+        except IndexError: return (Result.FAIL, "No file submitted!")
+        return test(filename)
+
+    return test_file
 
 
 def perform_tests(files_url, feedback_url, test):
