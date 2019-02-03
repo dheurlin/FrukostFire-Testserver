@@ -1,5 +1,7 @@
 from flask import Flask
 
+from typing import List, Tuple, Callable
+
 import os
 from enum import Enum
 
@@ -15,17 +17,22 @@ class Result(Enum):
     PASS    = 'pass'
     FAIL    = 'fail'
 
+TestResult = Tuple[Result, str]
+
+SingleTest = Callable[[str], TestResult]
+MultiTest = Callable[[List[str]], TestResult]
+
 @app.route('/application/<path:files_url>/feedback/<path:feedback_url>')
 def application(files_url, feedback_url):
     perform_tests(files_url, feedback_url, test_single_file(validate_application))
     return "Running tests"
 
-def validate_application(filename):
+def validate_application(filename: str) -> TestResult:
     """
     Validates the sittning application. Expecting filename to refer to a yaml file
     """
     class Field():
-        def __init__(self, name, required=False):
+        def __init__(self, name: str, required: bool = False):
             self.name = name
             self.required = required
 
@@ -51,12 +58,11 @@ def validate_application(filename):
 
     return (Result.PASS, str(data))
 
-def test_single_file(test):
+def test_single_file(test: SingleTest) -> MultiTest:
     """
-    runs a test : File -> (result : Result, msg : String) that operates
-    on a single file
+    runs a test on single file
     """
-    def test_file(filenames):
+    def test_file(filenames: List[str]) -> TestResult:
         try: filename = filenames[0]
         except IndexError: return (Result.FAIL, "No file submitted!")
         return test(filename)
@@ -64,16 +70,16 @@ def test_single_file(test):
     return test_file
 
 
-def perform_tests(files_url, feedback_url, test):
+def perform_tests(files_url: str, feedback_url: str, test: MultiTest) -> None:
     """
-    Downloads the files, runs the test : [file] -> (result : Result, msg : String)
-    function on each file, and sends the feedback to the server.
+    Downloads the files, runs the test function on each file,
+    and sends the feedback to the server.
     """
     res, msg = test_from_url(url_to_fire(files_url), test)
     send_feedback(res, msg, url_to_fire(feedback_url))
 
 
-def test_from_url(url, test):
+def test_from_url(url: str, test: MultiTest) -> TestResult:
     """
     Downloads and unpacks the url, and performs the test
     """
@@ -87,12 +93,12 @@ def test_from_url(url, test):
         fullpaths = list(map(lambda f: os.path.join(files_dir, f), os.listdir(files_dir)))
         return test(fullpaths)
 
-def send_feedback(result, msg, feedback_url):
+def send_feedback(result: Result, msg: str, feedback_url: str) -> None:
     url = f'{feedback_url}?status={result.value}'
     print(f"#### sending feedback to url {url} ######")
     urlopen(url, bytearray(msg, 'utf-8'))
 
-def url_to_fire(url):
+def url_to_fire(url: str) -> str:
     """
     Converts a url so that the host is 'fire', letting us communiate
     to the fire service within the container instead of going via
