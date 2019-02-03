@@ -19,15 +19,18 @@ class Result(Enum):
 
 TestResult = Tuple[Result, str]
 
-SingleTest = Callable[[str], TestResult]
-MultiTest = Callable[[List[str]], TestResult]
+Path = str
+Url  = str
+
+SingleTest = Callable[[Path], TestResult]
+MultiTest  = Callable[[List[Path]], TestResult]
 
 @app.route('/application/<path:files_url>/feedback/<path:feedback_url>')
 def application(files_url, feedback_url):
     perform_tests(files_url, feedback_url, test_single_file(validate_application))
     return "Running tests"
 
-def validate_application(filename: str) -> TestResult:
+def validate_application(filename: Path) -> TestResult:
     """
     Validates the sittning application. Expecting filename to refer to a yaml file
     """
@@ -70,7 +73,7 @@ def test_single_file(test: SingleTest) -> MultiTest:
     return test_file
 
 
-def perform_tests(files_url: str, feedback_url: str, test: MultiTest) -> None:
+def perform_tests(files_url: Url, feedback_url: Url, test: MultiTest) -> None:
     """
     Downloads the files, runs the test function on each file,
     and sends the feedback to the server.
@@ -79,7 +82,7 @@ def perform_tests(files_url: str, feedback_url: str, test: MultiTest) -> None:
     send_feedback(res, msg, url_to_fire(feedback_url))
 
 
-def test_from_url(url: str, test: MultiTest) -> TestResult:
+def test_from_url(url: Url, test: MultiTest) -> TestResult:
     """
     Downloads and unpacks the url, and performs the test
     """
@@ -93,12 +96,12 @@ def test_from_url(url: str, test: MultiTest) -> TestResult:
         fullpaths = list(map(lambda f: os.path.join(files_dir, f), os.listdir(files_dir)))
         return test(fullpaths)
 
-def send_feedback(result: Result, msg: str, feedback_url: str) -> None:
+def send_feedback(result: Result, msg: str, feedback_url: Url) -> None:
     url = f'{feedback_url}?status={result.value}'
     print(f"#### sending feedback to url {url} ######")
     urlopen(url, bytearray(msg, 'utf-8'))
 
-def url_to_fire(url: str) -> str:
+def url_to_fire(url: Url) -> Url:
     """
     Converts a url so that the host is 'fire', letting us communiate
     to the fire service within the container instead of going via
