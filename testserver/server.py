@@ -1,34 +1,23 @@
 from flask import Flask
 
 from typing import List, Tuple, Callable
+import yaml
+import sqlite3
 
-import os
-from enum import Enum
+from testing import Result, TestResult, SingleTest, MultiTest, Path
+from testing import perform_tests, test_single_file
 
-from    urllib.parse   import urlsplit, urlunsplit
-from    urllib.request import urlretrieve, urlopen
-import  tarfile
-from    tempfile       import TemporaryDirectory
-import  yaml
+import db
 
 app = Flask(__name__)
 
-class Result(Enum):
-    PASS    = 'pass'
-    FAIL    = 'fail'
 
-TestResult = Tuple[Result, str]
-
-Path = str
-Url  = str
-
-SingleTest = Callable[[Path], TestResult]
-MultiTest  = Callable[[List[Path]], TestResult]
 
 @app.route('/application/<path:files_url>/feedback/<path:feedback_url>')
 def application(files_url, feedback_url):
     perform_tests(files_url, feedback_url, test_single_file(validate_application))
     return "Running tests"
+
 
 def validate_application(filename: Path) -> TestResult:
     """
@@ -56,60 +45,19 @@ def validate_application(filename: Path) -> TestResult:
     if not len(missing) == 0:
         return (Result.FAIL, "Missing required fields: \n" + "\n".join(missing))
 
+    if not data['gdpr'] == 'ok':
+        return (Result.FAIL, "You must answer 'ok' to GDPR to attend. Sorry!")
 
-    # TODO verify GDPR
+    namn = data['namn']
+    try: gnäll = data['matgnäll']
+    except: gnäll = []
 
-    return (Result.PASS, str(data))
+    try: db.insert_attendent(namn, gnäll)
+    except sqlite3.IntegrityError:
+        return (Result.FAIL, f'Du har redan anmält dig, {namn}!')
 
-def test_single_file(test: SingleTest) -> MultiTest:
-    """
-    runs a test on single file
-    """
-    def test_file(filenames: List[str]) -> TestResult:
-        try: filename = filenames[0]
-        except IndexError: return (Result.FAIL, "No file submitted!")
-        return test(filename)
+    return (Result.PASS, f'Välkommen till sittningen, {namn}!')
 
-    return test_file
-
-
-def perform_tests(files_url: Url, feedback_url: Url, test: MultiTest) -> None:
-    """
-    Downloads the files, runs the test function on each file,
-    and sends the feedback to the server.
-    """
-    res, msg = test_from_url(url_to_fire(files_url), test)
-    send_feedback(res, msg, url_to_fire(feedback_url))
-
-
-def test_from_url(url: Url, test: MultiTest) -> TestResult:
-    """
-    Downloads and unpacks the url, and performs the test
-    """
-    with TemporaryDirectory() as arch_dir, TemporaryDirectory() as files_dir:
-        arch_path = os.path.join(arch_dir, 'archive.tar.gz')
-        print(f"#### downloading from url {url} ######")
-        urlretrieve(url, arch_path)
-        with tarfile.open(arch_path) as tar:
-            tar.extractall(files_dir)
-
-        fullpaths = list(map(lambda f: os.path.join(files_dir, f), os.listdir(files_dir)))
-        return test(fullpaths)
-
-def send_feedback(result: Result, msg: str, feedback_url: Url) -> None:
-    url = f'{feedback_url}?status={result.value}'
-    print(f"#### sending feedback to url {url} ######")
-    urlopen(url, bytearray(msg, 'utf-8'))
-
-def url_to_fire(url: Url) -> Url:
-    """
-    Converts a url so that the host is 'fire', letting us communiate
-    to the fire service within the container instead of going via
-    the internet
-    """
-    parts = list(urlsplit(url))
-    parts[1] = 'fire:5000'
-    return urlunsplit(parts)
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", debug=True, port=14500)

@@ -1,0 +1,9 @@
+# Obligatorisk
+namn: "Ditt namn"
+# Svara 'ok' om du går med på att denna data lagras
+# för att fötbättra din sittningsupplevelse
+gdpr: "ok"
+# # Lista av matgnäll, fyll endast i om applicerbart
+# matgnäll:
+#     - "matgnäll 1"
+#     - "matgnäll 2"
