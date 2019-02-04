@@ -12,7 +12,6 @@ import db
 app = Flask(__name__)
 
 
-
 @app.route('/application/<path:files_url>/feedback/<path:feedback_url>')
 def application(files_url, feedback_url):
     perform_tests(files_url, feedback_url, test_single_file(validate_application))
